@@ -2,13 +2,13 @@ package de.thro.inf.prg3.a11;
 
 import de.thro.inf.prg3.a11.openmensa.OpenMensaAPI;
 import de.thro.inf.prg3.a11.openmensa.OpenMensaAPIService;
+import de.thro.inf.prg3.a11.openmensa.model.Canteen;
+import de.thro.inf.prg3.a11.openmensa.model.Meal;
+import de.thro.inf.prg3.a11.openmensa.model.PageInfo;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.Locale;
-import java.util.Scanner;
+import java.util.*;
 
 public enum MenuStrategy {
 
@@ -20,6 +20,35 @@ public enum MenuStrategy {
 			 * at first get a page without an index to be able to extract the required pagination information
 			 * afterwards you can iterate the remaining pages
 			 * keep in mind that you should await the process as the user has to select canteen with a specific id */
+			openMensaAPI.getCanteens().thenApply(response -> {
+				System.out.println("list mit kantienen erstellt");
+				List<Canteen> canteenList;
+				PageInfo pageInfo = PageInfo.extractFromResponse(response);
+
+				if(response.body() == null){
+					canteenList = new LinkedList<Canteen>();
+				}else{
+					canteenList = response.body();
+				}
+
+				for(int i = 2; i < pageInfo.getTotalCountOfPages(); i++ ){
+					try {
+						canteenList.addAll(openMensaAPI.getCanteens(i).get());
+					}catch (Exception e){
+						System.out.println("Ooops: " + e.toString());
+					}
+				}
+				return canteenList;
+			}).thenApply(canteenList -> {
+				System.out.println("vorherige liste sortieren nach id");
+				canteenList.sort(Comparator.comparing(canteen -> canteen.getId()));
+				return canteenList;
+			}).thenAccept(canteenList -> {
+				System.out.println("ausgabe aller kantienen");
+				for(Canteen canteen : canteenList){
+					System.out.println("Canteen: " + canteen);
+				}
+			});
 		}
 	},
 	SET_CANTEEN {
@@ -34,6 +63,15 @@ public enum MenuStrategy {
 			/* TODO fetch all meals for the currently selected canteen
 			 * to avoid errors retrieve at first the state of the canteen and check if the canteen is opened at the selected day
 			 * don't forget to check if a canteen was selected previously! */
+			openMensaAPI.getCanteenState(currentCanteenId, dateFormat.format(currentDate.getTime())).thenApply(state -> {
+				if (state != null && !state.isClosed()){
+					return openMensaAPI.getMeals(currentCanteenId, dateFormat.format(currentDate.getTime()));
+				}else{
+					List<Meal> mealListEmpty = new LinkedList<Meal>();
+					return mealListEmpty;
+				}
+			});
+
 		}
 	},
 	SET_DATE {
